@@ -150,23 +150,47 @@
   .avatar.large .initial{font-size:8rem;}
   .blood-fill{
     position:absolute; left:0; right:0; bottom:0;
-    background:linear-gradient(to top, rgba(143,28,46,0.92), rgba(143,28,46,0.45));
+    background:rgba(90,15,20,0.75);
     transition:height .35s ease;
     z-index:1;
+  }
+  .blood-fill-agg{
+    position:absolute; left:0; right:0; bottom:0;
+    background:rgba(50,8,12,0.92);
+    transition:height .35s ease;
+    z-index:2;
   }
 
   .name{font-weight:600; font-size:1.05rem; text-align:center;}
   .duel-slot .name{font-size:1.8rem; margin-top:8px;}
 
-  .hp-row, .soif-row{display:flex; align-items:center; gap:8px; justify-content:center;}
-  .hp-row button{
-    width:28px; height:28px; border-radius:50%;
-    border:1px solid var(--border); background:var(--panel-alt); color:var(--text);
-    font-size:1.05rem; line-height:1; padding:0;
+  .soif-row{display:flex; align-items:center; gap:8px; justify-content:center;}
+
+  .health-track{display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap;}
+  .health-boxes{display:flex; flex-wrap:wrap; gap:3px; justify-content:center; max-width:180px;}
+  .health-box{
+    width:15px; height:15px; border-radius:3px;
+    border:1.5px solid var(--border); background:var(--panel-alt);
+    cursor:pointer; flex:none;
   }
-  .hp-row span{font-variant-numeric:tabular-nums; font-size:1rem; color:var(--text-dim); min-width:52px; text-align:center;}
-  .duel-slot .hp-row span{font-size:1.4rem; min-width:70px; color:var(--text);}
-  .duel-slot .hp-row button{width:34px; height:34px; font-size:1.2rem;}
+  .health-box.superficial{background:#c9622e; border-color:#c9622e;}
+  .health-box.aggravated{background:#5c0f16; border-color:#5c0f16;}
+  .duel-slot .health-box{width:22px; height:22px; border-radius:4px;}
+  .duel-slot .health-boxes{max-width:280px; gap:5px;}
+  .health-quick{display:flex; gap:4px;}
+  .health-quick button{
+    width:24px; height:24px; border-radius:50%;
+    border:1px solid var(--border); background:var(--panel-alt); color:var(--text);
+    font-size:1rem; line-height:1; padding:0; cursor:pointer;
+  }
+  .duel-slot .health-quick button{width:32px; height:32px; font-size:1.2rem;}
+  .health-status{font-size:0.72rem; color:var(--blood-bright); text-align:center; margin-top:2px;}
+  .hp-set{display:flex; align-items:center; gap:5px; justify-content:center; margin-top:4px;}
+  .hp-set label{font-size:0.7rem; color:var(--text-dim);}
+  .hp-set input{
+    width:38px; padding:2px 4px; font-size:0.8rem; text-align:center;
+    border-radius:5px; border:1px solid var(--border); background:var(--panel-alt); color:var(--text);
+  }
 
   .pip{
     width:15px; height:15px; border-radius:50%;
@@ -496,6 +520,17 @@ window.addEventListener('storage', (e)=>{
   }
 });
 
+function ensureHealth(entity){
+  if(!entity.health || !Array.isArray(entity.health) || entity.health.length === 0){
+    const maxHp = entity.maxHp || (entity.hp || 5);
+    const hp = (entity.hp !== undefined) ? entity.hp : maxHp;
+    const boxes = new Array(maxHp).fill(0);
+    const dmg = Math.max(0, maxHp - hp);
+    for(let i=0; i<dmg; i++){ boxes[maxHp - 1 - i] = 1; }
+    entity.health = boxes;
+  }
+}
+
 function loadState(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem('vtm_battle_state')); }catch(e){}
@@ -511,10 +546,12 @@ function loadState(){
     if(!p.clan){
       if(def && def.clan) p.clan = def.clan;
     }
+    ensureHealth(p);
   });
   // rétro-compatibilité : les ennemis créés avant l'ajout du cadre d'action n'en ont pas encore
   state.enemies.forEach(e=>{
     if(!e.action) e.action = defaultAction();
+    ensureHealth(e);
   });
   let savedRoster = null;
   try{ savedRoster = JSON.parse(localStorage.getItem('vtm_roster')); }catch(e){}
@@ -537,11 +574,46 @@ function resetEncounter(){
 
 function toggleLock(){ state.locked = !state.locked; saveState(); render(); }
 
-function adjustHp(type, id, delta){
+function toggleHealthBox(type, id, idx){
   const arr = type==='player' ? state.players : state.enemies;
   const e = arr.find(x=>x.id===id);
-  if(!e) return;
-  e.hp = Math.max(0, Math.min(e.maxHp, e.hp + delta));
+  if(!e || !e.health) return;
+  e.health[idx] = (e.health[idx] + 1) % 3;
+  saveState(); render();
+}
+
+function adjustHealthQuick(type, id, delta){
+  const arr = type==='player' ? state.players : state.enemies;
+  const e = arr.find(x=>x.id===id);
+  if(!e || !e.health) return;
+  const h = e.health;
+  if(delta === 1){
+    const emptyIdx = h.indexOf(0);
+    if(emptyIdx !== -1){
+      h[emptyIdx] = 1;
+    } else {
+      for(let i=h.length-1; i>=0; i--){ if(h[i]===1){ h[i]=2; break; } }
+    }
+  } else if(delta === -1){
+    let idx = -1;
+    for(let i=h.length-1;i>=0;i--){ if(h[i]===1){ idx=i; break; } }
+    if(idx!==-1){ h[idx]=0; }
+    else {
+      for(let i=h.length-1;i>=0;i--){ if(h[i]===2){ idx=i; break; } }
+      if(idx!==-1){ h[idx]=1; }
+    }
+  }
+  saveState(); render();
+}
+
+function setPlayerBoxCount(id, newCountRaw){
+  const p = state.players.find(x=>x.id===id);
+  if(!p) return;
+  const newCount = Math.max(1, Math.min(20, parseInt(newCountRaw) || 1));
+  const old = p.health || [];
+  const next = new Array(newCount).fill(0);
+  for(let i=0;i<Math.min(old.length, newCount);i++){ next[i] = old[i]; }
+  p.health = next;
   saveState(); render();
 }
 
@@ -685,7 +757,7 @@ async function addFromPool(){
     const localPool = portraitPools[t.category] || [];
     if(localPool.length) image = localPool[Math.floor(Math.random()*localPool.length)];
   }
-  state.enemies.push({id:uid(), baseName:t.label, hp:hp, maxHp:hp, color:AVATAR_COLORS[5], image, statPool, action:defaultAction()});
+  state.enemies.push({id:uid(), baseName:t.label, hp:hp, maxHp:hp, health:new Array(hp).fill(0), color:AVATAR_COLORS[5], image, statPool, action:defaultAction()});
   saveState(); render();
 }
 
@@ -716,7 +788,7 @@ function removePoolImage(category, idx){
 function addFromRoster(rid){
   const r = roster.find(x=>x.id===rid);
   if(!r) return;
-  state.enemies.push({id:uid(), baseName:r.name, hp:r.hp, maxHp:r.hp, color:'#5c1a22', arme:r.arme, disciplines:r.disciplines, clan:r.clan, image:r.image, action:defaultAction()});
+  state.enemies.push({id:uid(), baseName:r.name, hp:r.hp, maxHp:r.hp, health:new Array(r.hp).fill(0), color:'#5c1a22', arme:r.arme, disciplines:r.disciplines, clan:r.clan, image:r.image, action:defaultAction()});
   saveState(); render();
 }
 
@@ -846,7 +918,12 @@ function handleImportRoster(input){
 /* ---------- render helpers ---------- */
 
 function avatarHTML(entity, size){
-  const ratio = entity.maxHp>0 ? 1-(entity.hp/entity.maxHp) : 0;
+  const health = entity.health || [];
+  const total = health.length || 1;
+  const aggCount = health.filter(b=>b===2).length;
+  const supCount = health.filter(b=>b===1).length;
+  const aggRatio = aggCount/total;
+  const supRatio = supCount/total;
   let inner;
   if(entity.video){
     inner = `<video autoplay loop muted playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;"><source src="${entity.video}" type="video/webm"></video>`;
@@ -855,23 +932,45 @@ function avatarHTML(entity, size){
   } else {
     inner = `<span class="initial">${esc(entity.name.charAt(0).toUpperCase())}</span>`;
   }
+  const aggPct = Math.max(0,Math.min(100,Math.round(aggRatio*100)));
+  const supPct = Math.max(0,Math.min(100-aggPct,Math.round(supRatio*100)));
   return `<div class="avatar ${size}" style="--avatar-color:${entity.color||'#4a4046'}">
     ${inner}
-    <div class="blood-fill" style="height:${Math.max(0,Math.min(100,Math.round(ratio*100)))}%"></div>
+    <div class="blood-fill" style="height:${aggPct+supPct}%"></div>
+    <div class="blood-fill-agg" style="height:${aggPct}%"></div>
   </div>`;
 }
 
-function hpControl(entity, type){
-  if(DISPLAY_MODE){
-    if(type === 'enemy') return ''; // PV ennemis jamais chiffrés en vue joueurs, seul le sang visuel parle
-    return `<div class="hp-row"><span>${entity.hp} / ${entity.maxHp}</span></div>`;
+function healthTrackHTML(entity, type, showSetInput){
+  const health = entity.health || [];
+  const isPlayerLeft = showSetInput;
+  if(DISPLAY_MODE && type === 'enemy'){
+    return ''; // rien de chiffré pour les ennemis en vue joueurs, seul le sang du portrait parle
   }
-  return `<div class="hp-row">
-    <button onclick="adjustHp('${type}','${entity.id}',-1)">–</button>
-    <span>${entity.hp} / ${entity.maxHp}</span>
-    <button onclick="adjustHp('${type}','${entity.id}',1)">+</button>
-  </div>`;
+  const locked = DISPLAY_MODE; // en vue joueurs, les cases restent visibles mais non cliquables (pour les joueurs)
+  const boxes = health.map((b,idx)=>{
+    const cls = b===1 ? 'superficial' : (b===2 ? 'aggravated' : '');
+    const onclick = locked ? '' : `onclick="toggleHealthBox('${type}','${entity.id}',${idx})"`;
+    return `<span class="health-box ${cls}" ${onclick}></span>`;
+  }).join('');
+  const quick = locked ? '' : `<div class="health-quick">
+      <button onclick="adjustHealthQuick('${type}','${entity.id}',-1)">–</button>
+      <button onclick="adjustHealthQuick('${type}','${entity.id}',1)">+</button>
+    </div>`;
+  const full = health.length>0 && health.every(b=>b!==0);
+  const allAgg = health.length>0 && health.every(b=>b===2);
+  let status = '';
+  if(allAgg) status = '<div class="health-status">💀 Piste aggravée pleine</div>';
+  else if(full) status = '<div class="health-status">⚠ Piste pleine</div>';
+  const setInput = (isPlayerLeft && !DISPLAY_MODE)
+    ? `<div class="hp-set"><label>PV</label><input type="number" min="1" max="20" value="${health.length}" onchange="setPlayerBoxCount('${entity.id}', this.value)"></div>`
+    : '';
+  return `<div class="health-track">
+    <div class="health-boxes">${boxes}</div>
+    ${quick}
+  </div>${status}${setInput}`;
 }
+
 
 function soifControl(p){
   let dots = '';
@@ -966,7 +1065,7 @@ function playerCardHTML(p){
     <div class="portrait-block ${clickable?'clickable':''}" ${clickable?`onclick="selectCenter('player','${p.id}')"`:''}>
       ${avatarHTML(p,'small')}
       <div class="name">${esc(p.name)}</div>
-      ${hpControl(p,'player')}
+      ${healthTrackHTML(p,'player',true)}
       ${soifControl(p)}
     </div>
     ${actionPanelHTML(p,'player')}
@@ -980,7 +1079,7 @@ function enemyCardHTML(e){
     <div class="portrait-block ${clickable?'clickable':''}" ${clickable?`onclick="selectCenter('enemy','${e.id}')"`:''}>
       ${avatarHTML(e,'small')}
       <div class="name">${esc(e.name)}</div>
-      ${hpControl(e,'enemy')}
+      ${healthTrackHTML(e,'enemy',false)}
     </div>
     ${DISPLAY_MODE ? '' : actionPanelHTML(e,'enemy')}
   </div>`;
@@ -996,7 +1095,7 @@ function centerSlotHTML(side){
   return `${avatarHTML(entity,'large')}
     <div class="duel-info-plate">
       <div class="name">${esc(entity.name)}</div>
-      ${hpControl(entity, side==='player'?'player':'enemy')}
+      ${healthTrackHTML(entity, side==='player'?'player':'enemy', false)}
       ${side==='player' ? soifControl(entity) : ''}
     </div>`;
 }
