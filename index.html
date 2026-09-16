@@ -650,19 +650,20 @@ const GITHUB_BRANCH = 'main'; // à changer ici si le dépôt utilise une autre 
 let githubImageCache = {}; // category -> [urls] une fois récupéré, mis en cache pour la session
 
 async function fetchGithubCategoryImages(category){
-  if(githubImageCache[category] !== undefined) return githubImageCache[category];
+  if(githubImageCache[category] !== undefined && githubImageCache[category].length > 0){
+    return githubImageCache[category];
+  }
   try{
     const res = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${category}?ref=${GITHUB_BRANCH}`);
-    if(!res.ok){ githubImageCache[category] = []; return []; }
+    if(!res.ok){ return []; } // pas de mise en cache d'un échec : on réessaiera au prochain ajout
     const data = await res.json();
     const imgs = (Array.isArray(data) ? data : [])
       .filter(f => f.type === 'file' && /\.(png|jpe?g|webp|gif)$/i.test(f.name))
       .map(f => f.download_url);
-    githubImageCache[category] = imgs;
+    if(imgs.length > 0) githubImageCache[category] = imgs; // on ne met en cache que les succès non vides
     return imgs;
   } catch(e){
-    githubImageCache[category] = [];
-    return [];
+    return []; // pas de mise en cache d'un échec non plus
   }
 }
 
