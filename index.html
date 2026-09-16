@@ -177,6 +177,10 @@
   .duel-slot .pip{width:18px; height:18px;}
 
   .action-card{flex:1; min-width:0;}
+  .stat-pool-info{
+    font-size:0.75rem; color:var(--text-dim); background:var(--panel-alt);
+    border:1px solid var(--border); border-radius:6px; padding:5px 8px; margin-bottom:7px;
+  }
   .action-card select, .action-card input, .action-card textarea{
     width:100%;
     background:var(--panel-alt);
@@ -435,11 +439,13 @@ function disciplinesFor(entity){
 }
 
 const ENEMY_POOL = [
-  {label:'Thug', hp:5, category:'thug'},
-  {label:'Vampire', hp:6, category:'vampire'},
-  {label:'Ordre', hp:5, category:'ordre'},
-  {label:'Civil', hp:3, category:'civil'}
+  {label:'Thug', hpMin:3, hpMax:6, category:'thug', volMin:3, volMax:4, combatMin:5, combatMax:7, socialMin:5, socialMax:6, mentalMin:3, mentalMax:4},
+  {label:'Vampire', hpMin:5, hpMax:8, category:'vampire', volMin:5, volMax:6, combatMin:6, combatMax:8, socialMin:5, socialMax:7, mentalMin:5, mentalMax:6},
+  {label:'Ordre', hpMin:4, hpMax:6, category:'ordre', volMin:5, volMax:5, combatMin:6, combatMax:7, socialMin:5, socialMax:6, mentalMin:5, mentalMax:6},
+  {label:'Civil', hpMin:3, hpMax:5, category:'civil', volMin:3, volMax:4, combatMin:3, combatMax:4, socialMin:3, socialMax:5, mentalMin:3, mentalMax:4}
 ];
+
+function rollRange(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
 
 const PORTRAIT_CATEGORIES = ['thug','vampire','ordre','civil'];
 const PORTRAIT_CATEGORY_LABELS = {thug:'Thug', vampire:'Vampire', ordre:'Ordre', civil:'Civil'};
@@ -661,6 +667,13 @@ async function fetchGithubCategoryImages(category){
 async function addFromPool(){
   const i = parseInt(document.getElementById('poolSelect').value);
   const t = ENEMY_POOL[i];
+  const hp = rollRange(t.hpMin, t.hpMax);
+  const statPool = {
+    volonte: rollRange(t.volMin, t.volMax),
+    combat: rollRange(t.combatMin, t.combatMax),
+    social: rollRange(t.socialMin, t.socialMax),
+    mental: rollRange(t.mentalMin, t.mentalMax)
+  };
   let image;
   const githubImgs = await fetchGithubCategoryImages(t.category);
   if(githubImgs.length){
@@ -669,7 +682,7 @@ async function addFromPool(){
     const localPool = portraitPools[t.category] || [];
     if(localPool.length) image = localPool[Math.floor(Math.random()*localPool.length)];
   }
-  state.enemies.push({id:uid(), baseName:t.label, hp:t.hp, maxHp:t.hp, color:AVATAR_COLORS[5], image, action:defaultAction()});
+  state.enemies.push({id:uid(), baseName:t.label, hp:hp, maxHp:hp, color:AVATAR_COLORS[5], image, statPool, action:defaultAction()});
   saveState(); render();
 }
 
@@ -923,7 +936,11 @@ function actionPanelHTML(entity, kind){
   const targetSelect = `<select ${disabled} onchange="${updateFn}('${entity.id}','target',this.value)">
       <option value="">— cible (optionnel) —</option>${targetOptions}
     </select>`;
+  const statPoolInfo = (entity.statPool)
+    ? `<div class="stat-pool-info">Volonté ${entity.statPool.volonte} · Combat ${entity.statPool.combat}d · Social ${entity.statPool.social}d · Mental/Perception ${entity.statPool.mental}d</div>`
+    : '';
   return `<div class="action-card">
+    ${statPoolInfo}
     <select ${disabled} onchange="${updateFn}('${entity.id}','type',this.value)">
       <option value="surprise" ${a.type==='surprise'?'selected':''}>Surprise</option>
       <option value="melee" ${a.type==='melee'?'selected':''}>Mêlée continue</option>
@@ -1061,7 +1078,7 @@ function render(){
   document.getElementById('centerPlayer').innerHTML = centerSlotHTML('player');
   document.getElementById('centerEnemy').innerHTML = centerSlotHTML('enemy');
 
-  document.getElementById('poolSelect').innerHTML = ENEMY_POOL.map((t,i)=>`<option value="${i}">${esc(t.label)} (${t.hp} PV)</option>`).join('');
+  document.getElementById('poolSelect').innerHTML = ENEMY_POOL.map((t,i)=>`<option value="${i}">${esc(t.label)} (${t.hpMin}-${t.hpMax} PV)</option>`).join('');
 
   document.getElementById('poolImagesList').innerHTML = PORTRAIT_CATEGORIES.map(cat=>{
     const imgs = portraitPools[cat] || [];
