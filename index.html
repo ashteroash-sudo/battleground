@@ -179,8 +179,10 @@
   .action-card{flex:1; min-width:0;}
   .stat-pool-info{
     font-size:0.75rem; color:var(--text-dim); background:var(--panel-alt);
-    border:1px solid var(--border); border-radius:6px; padding:5px 8px; margin-bottom:7px;
+    border:1px solid var(--border); border-radius:6px; padding:6px 8px; margin-bottom:7px;
+    display:grid; grid-template-columns:1fr 1fr; gap:2px 10px;
   }
+  .stat-pool-info span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .action-card select, .action-card input, .action-card textarea{
     width:100%;
     background:var(--panel-alt);
@@ -937,7 +939,12 @@ function actionPanelHTML(entity, kind){
       <option value="">— cible (optionnel) —</option>${targetOptions}
     </select>`;
   const statPoolInfo = (entity.statPool)
-    ? `<div class="stat-pool-info">Volonté ${entity.statPool.volonte} · Combat ${entity.statPool.combat}d · Social ${entity.statPool.social}d · Mental/Perception ${entity.statPool.mental}d</div>`
+    ? `<div class="stat-pool-info">
+        <span>Volonté ${entity.statPool.volonte}</span>
+        <span>Combat ${entity.statPool.combat}</span>
+        <span>Social ${entity.statPool.social}</span>
+        <span style="grid-column:span 2;">Mental/Perception ${entity.statPool.mental}</span>
+      </div>`
     : '';
   return `<div class="action-card">
     ${statPoolInfo}
