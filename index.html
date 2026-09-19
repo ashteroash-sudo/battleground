@@ -136,6 +136,12 @@
     background:transparent;
   }
   .ribbon-card.resolved .r-name, .ribbon-card.resolved .r-target{ text-decoration:line-through; }
+  .r-malus{
+    color:var(--blood-bright, #e05a5a);
+    font-size:0.75rem;
+    font-weight:700;
+    margin-left:4px;
+  }
 
   .col-title{
     font-family:var(--font-display);
@@ -1221,7 +1227,7 @@ function actionRibbonHTML(){
   allEntities.forEach(e=>{ byId[e.id] = e; });
 
   const consumed = new Set();
-  const items = [];
+  const raw = [];
   allEntities.forEach(e=>{
     if(consumed.has(e.id)) return;
     const a = e.action;
@@ -1231,26 +1237,41 @@ function actionRibbonHTML(){
       && (INITIATIVE_NUMBERS[target.action.type]||99) === num;
     if(mutual){
       consumed.add(e.id); consumed.add(target.id);
-      const resolved = e.played ? ' resolved' : '';
-      items.push({num, html:`<div class="ribbon-card${resolved}" onclick="toggleActionPair('${e.side}','${e.id}','${target.side}','${target.id}')">
-        <span class="r-num">${num}</span>
-        <span class="r-name">${esc(e.name)} ${iconFor(e)}</span>
-        <span class="r-arrow">↔</span>
-        <span class="r-name">${iconFor(target)} ${esc(target.name)}</span>
-      </div>`});
+      raw.push({num, type:'pair', e, target});
     } else {
       consumed.add(e.id);
-      const targetName = target ? target.name : null;
-      const resolved = e.played ? ' resolved' : '';
-      items.push({num, html:`<div class="ribbon-card${resolved}" onclick="togglePlayed('${e.side}','${e.id}')">
-        <span class="r-num">${num}</span>
-        <span class="r-name">${esc(e.name)} ${iconFor(e)}</span>
-        ${targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(targetName)}</span>` : ''}
-      </div>`});
+      raw.push({num, type:'solo', e, target});
     }
   });
-  items.sort((a,b)=>a.num-b.num);
-  return items.map(i=>i.html).join('');
+  raw.sort((a,b)=>a.num-b.num);
+
+  const hitCount = {};
+  const malusFor = (id)=>{ const n = hitCount[id]||0; hitCount[id] = n+1; return n; };
+  const malusTag = (m)=> m>0 ? `<span class="r-malus">−${m} dé${m>1?'s':''}</span>` : '';
+
+  return raw.map(item=>{
+    const {num, e, target} = item;
+    if(item.type==='pair'){
+      const malusOnTarget = malusFor(target.id);
+      const malusOnE = malusFor(e.id);
+      const resolved = e.played ? ' resolved' : '';
+      return `<div class="ribbon-card${resolved}" onclick="toggleActionPair('${e.side}','${e.id}','${target.side}','${target.id}')">
+        <span class="r-num">${num}</span>
+        <span class="r-name">${esc(e.name)} ${iconFor(e)}${malusTag(malusOnE)}</span>
+        <span class="r-arrow">↔</span>
+        <span class="r-name">${iconFor(target)} ${esc(target.name)}${malusTag(malusOnTarget)}</span>
+      </div>`;
+    } else {
+      const m = target ? malusFor(target.id) : 0;
+      const targetName = target ? target.name : null;
+      const resolved = e.played ? ' resolved' : '';
+      return `<div class="ribbon-card${resolved}" onclick="togglePlayed('${e.side}','${e.id}')">
+        <span class="r-num">${num}</span>
+        <span class="r-name">${esc(e.name)} ${iconFor(e)}</span>
+        ${targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(targetName)}${malusTag(m)}</span>` : ''}
+      </div>`;
+    }
+  }).join('');
 }
 
 function centerSlotHTML(side){
