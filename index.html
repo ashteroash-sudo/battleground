@@ -116,26 +116,6 @@
   .player-card{display:flex; gap:16px; align-items:flex-start;}
   .enemy-card{display:flex; gap:16px; align-items:flex-start;}
 
-  .initiative-badge{
-    position:absolute;
-    right:-14px;
-    bottom:-14px;
-    width:46px;
-    height:46px;
-    border-radius:50%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:radial-gradient(circle at 32% 28%, var(--panel-alt), var(--panel) 75%);
-    border:2px solid var(--gold);
-    color:var(--gold);
-    font-family:var(--font-display);
-    font-weight:700;
-    font-size:1.35rem;
-    box-shadow:0 3px 10px rgba(0,0,0,.55);
-    z-index:5;
-  }
-
   .portrait-block{
     display:flex;
     flex-direction:column;
@@ -168,6 +148,25 @@
   }
   .avatar.small .initial{font-size:2.1rem;}
   .avatar.large .initial{font-size:8rem;}
+
+  .avatar-init-badge{
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:34%; height:34%;
+    min-width:70px; min-height:70px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 32% 28%, rgba(28,18,21,.85), rgba(10,6,7,.9) 75%);
+    border:4px solid var(--gold);
+    color:var(--gold);
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:clamp(2.4rem, 8vw, 5rem);
+    line-height:1;
+    box-shadow:0 6px 20px rgba(0,0,0,.7), inset 0 0 12px rgba(0,0,0,.5);
+    z-index:4;
+  }
   .blood-fill{
     position:absolute; left:0; right:0; bottom:0;
     background:rgba(90,15,20,0.75);
@@ -942,7 +941,7 @@ function handleImportRoster(input){
 
 /* ---------- render helpers ---------- */
 
-function avatarHTML(entity, size){
+function avatarHTML(entity, size, badgeNum){
   const health = entity.health || [];
   const total = health.length || 1;
   const aggCount = health.filter(b=>b===2).length;
@@ -959,10 +958,12 @@ function avatarHTML(entity, size){
   }
   const aggPct = Math.max(0,Math.min(100,Math.round(aggRatio*100)));
   const supPct = Math.max(0,Math.min(100-aggPct,Math.round(supRatio*100)));
+  const badge = badgeNum ? `<div class="avatar-init-badge">${badgeNum}</div>` : '';
   return `<div class="avatar ${size}" style="--avatar-color:${entity.color||'#4a4046'}">
     ${inner}
     <div class="blood-fill" style="height:${aggPct+supPct}%"></div>
     <div class="blood-fill-agg" style="height:${aggPct}%"></div>
+    ${badge}
   </div>`;
 }
 
@@ -1017,13 +1018,6 @@ function modSelect(id, field, val, disabled, updateFn){
 }
 
 const INITIATIVE_NUMBERS = { surprise:1, melee:2, distdisc:3, nouvelle:4, autre:5 };
-
-function initiativeBadgeHTML(entity){
-  if(!state.locked) return '';
-  const num = INITIATIVE_NUMBERS[entity.action.type];
-  if(!num) return '';
-  return `<div class="initiative-badge">${num}</div>`;
-}
 
 function actionPanelHTML(entity, kind){
   const a = entity.action;
@@ -1103,7 +1097,6 @@ function playerCardHTML(p){
       ${soifControl(p)}
     </div>
     ${actionPanelHTML(p,'player')}
-    ${initiativeBadgeHTML(p)}
   </div>`;
 }
 
@@ -1117,7 +1110,6 @@ function enemyCardHTML(e){
       ${healthTrackHTML(e,'enemy',false)}
     </div>
     ${DISPLAY_MODE ? '' : actionPanelHTML(e,'enemy')}
-    ${DISPLAY_MODE ? '' : initiativeBadgeHTML(e)}
   </div>`;
 }
 
@@ -1128,7 +1120,8 @@ function centerSlotHTML(side){
   if(!entity){
     return `<div class="duel-slot empty">Clique un portrait ${side==='player'?'joueur':'ennemi'} (en mode verrouillé) pour l'amener ici</div>`;
   }
-  return `${avatarHTML(entity,'large')}
+  const badgeNum = state.locked ? INITIATIVE_NUMBERS[entity.action.type] : null;
+  return `${avatarHTML(entity,'large',badgeNum)}
     <div class="duel-info-plate">
       <div class="name">${esc(entity.name)}</div>
       ${healthTrackHTML(entity, side==='player'?'player':'enemy', false)}
