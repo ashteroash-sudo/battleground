@@ -116,26 +116,6 @@
   .player-card{display:flex; gap:16px; align-items:flex-start;}
   .enemy-card{display:flex; gap:16px; align-items:flex-start;}
 
-  .initiative-badge{
-    position:absolute;
-    right:-14px;
-    bottom:-14px;
-    width:46px;
-    height:46px;
-    border-radius:50%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:radial-gradient(circle at 32% 28%, var(--panel-alt), var(--panel) 75%);
-    border:2px solid var(--gold);
-    color:var(--gold);
-    font-family:var(--font-display);
-    font-weight:700;
-    font-size:1.35rem;
-    box-shadow:0 3px 10px rgba(0,0,0,.55);
-    z-index:5;
-  }
-
   .portrait-block{
     display:flex;
     flex-direction:column;
@@ -951,7 +931,7 @@ function avatarHTML(entity, size){
   const supRatio = supCount/total;
   let inner;
   if(entity.video){
-    inner = (entity.image ? `<img src="${entity.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;">` : '') + `<video autoplay loop muted playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;"><source src="${entity.video}" type="video/webm"></video>`;
+    inner = (entity.image ? `<img src=\"${entity.image}\" alt=\"\" style=\"position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;\">` : '') + `<video autoplay loop muted playsinline style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;"><source src="${entity.video}" type="video/webm"></video>`;
   } else if(entity.image){
     inner = `<img src="${entity.image}" alt="" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;">`;
   } else {
@@ -1014,15 +994,6 @@ function modSelect(id, field, val, disabled, updateFn){
   let opts = '';
   for(let i=0;i<=3;i++){ opts += `<option value="${i}" ${val===i?'selected':''}>+${i}</option>`; }
   return `<select ${disabled} onchange="${updateFn}('${id}','${field}',parseInt(this.value))">${opts}</select>`;
-}
-
-const INITIATIVE_NUMBERS = { surprise:1, melee:2, distdisc:3, nouvelle:4, autre:5 };
-
-function initiativeBadgeHTML(entity){
-  if(!state.locked) return '';
-  const num = INITIATIVE_NUMBERS[entity.action.type];
-  if(!num) return '';
-  return `<div class="initiative-badge">${num}</div>`;
 }
 
 function actionPanelHTML(entity, kind){
@@ -1103,7 +1074,6 @@ function playerCardHTML(p){
       ${soifControl(p)}
     </div>
     ${actionPanelHTML(p,'player')}
-    ${initiativeBadgeHTML(p)}
   </div>`;
 }
 
@@ -1117,7 +1087,6 @@ function enemyCardHTML(e){
       ${healthTrackHTML(e,'enemy',false)}
     </div>
     ${DISPLAY_MODE ? '' : actionPanelHTML(e,'enemy')}
-    ${initiativeBadgeHTML(e)}
   </div>`;
 }
 
@@ -1213,13 +1182,9 @@ function render(){
   document.getElementById('lockBtn').className = 'btn' + (state.locked ? ' lock-on' : '');
   document.getElementById('viewToggleBtn').textContent = DISPLAY_MODE ? '✏️ Vue édition' : '🎭 Vue joueurs';
 
-  const byInitiative = (a,b) => (INITIATIVE_NUMBERS[a.action.type]||99) - (INITIATIVE_NUMBERS[b.action.type]||99);
-  const playersToRender = state.locked ? state.players.slice().sort(byInitiative) : state.players;
-  const enemiesToRender = state.locked ? enemiesViewCache.slice().sort(byInitiative) : enemiesViewCache;
-
-  document.getElementById('playersList').innerHTML = playersToRender.map(playerCardHTML).join('');
+  document.getElementById('playersList').innerHTML = state.players.map(playerCardHTML).join('');
   document.getElementById('enemiesList').innerHTML = enemiesViewCache.length
-    ? enemiesToRender.map(enemyCardHTML).join('')
+    ? enemiesViewCache.map(enemyCardHTML).join('')
     : '<p style="color:var(--text-dim); font-size:0.85rem;">Aucun ennemi pour l\'instant — ajoutez-en depuis le pool ou le répertoire.</p>';
 
   document.getElementById('centerPlayer').innerHTML = centerSlotHTML('player');
