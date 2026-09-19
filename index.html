@@ -113,8 +113,21 @@
     margin-bottom:16px;
     position:relative;
   }
-  .player-card{display:flex; gap:16px; align-items:flex-start;}
-  .enemy-card{display:flex; gap:16px; align-items:flex-start;}
+  .player-card{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start;}
+  .enemy-card{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start;}
+
+  .initiative-badge{
+    flex-basis:100%;
+    text-align:center;
+    margin-top:10px;
+    padding-top:8px;
+    border-top:1px solid var(--border);
+    font-family:var(--font-display);
+    font-size:0.85rem;
+    color:var(--gold);
+    letter-spacing:0.03em;
+  }
+  .initiative-badge b{font-size:1.1rem;}
 
   .portrait-block{
     display:flex;
@@ -996,6 +1009,15 @@ function modSelect(id, field, val, disabled, updateFn){
   return `<select ${disabled} onchange="${updateFn}('${id}','${field}',parseInt(this.value))">${opts}</select>`;
 }
 
+const INITIATIVE_NUMBERS = { surprise:1, melee:2, distdisc:3, nouvelle:4, autre:5 };
+
+function initiativeBadgeHTML(entity){
+  if(!state.locked) return '';
+  const num = INITIATIVE_NUMBERS[entity.action.type];
+  if(!num) return '';
+  return `<div class="initiative-badge">Initiative <b>${num}</b></div>`;
+}
+
 function actionPanelHTML(entity, kind){
   const a = entity.action;
   const disabled = (state.locked || DISPLAY_MODE) ? 'disabled' : '';
@@ -1074,6 +1096,7 @@ function playerCardHTML(p){
       ${soifControl(p)}
     </div>
     ${actionPanelHTML(p,'player')}
+    ${initiativeBadgeHTML(p)}
   </div>`;
 }
 
@@ -1087,6 +1110,7 @@ function enemyCardHTML(e){
       ${healthTrackHTML(e,'enemy',false)}
     </div>
     ${DISPLAY_MODE ? '' : actionPanelHTML(e,'enemy')}
+    ${DISPLAY_MODE ? '' : initiativeBadgeHTML(e)}
   </div>`;
 }
 
