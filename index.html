@@ -667,6 +667,18 @@ function togglePlayed(side, id){
   saveState(); render();
 }
 
+function toggleActionPair(side1, id1, side2, id2){
+  const arr1 = side1 === 'enemy' ? state.enemies : state.players;
+  const arr2 = side2 === 'enemy' ? state.enemies : state.players;
+  const e1 = arr1.find(x=>x.id===id1);
+  const e2 = arr2.find(x=>x.id===id2);
+  if(!e1 || !e2) return;
+  const newVal = !e1.played;
+  e1.played = newVal;
+  e2.played = newVal;
+  saveState(); render();
+}
+
 function nextTurn(){
   state.center = {player:null, enemy:null};
   state.turn = (state.turn||1) + 1;
@@ -1201,25 +1213,44 @@ function enemyCardHTML(e){
 
 function actionRibbonHTML(){
   if(!state.locked) return '';
-  const compareByInitiative = (a,b) => (INITIATIVE_NUMBERS[a.action.type]||99) - (INITIATIVE_NUMBERS[b.action.type]||99);
   const ICONS = {surprise:'💥', melee:'⚔️', distdisc_distance:'🔫', distdisc_discipline:'✨', nouvelle:'🏃', autre:'📜'};
+  const iconFor = (e)=>{ const a=e.action; const key = a.type==='distdisc' ? `distdisc_${a.distdiscMode}` : a.type; return ICONS[key] || '❔'; };
   const allEntities = state.players.map(p=>Object.assign({}, p, {side:'player'}))
     .concat(enemiesViewCache.map(e=>Object.assign({}, e, {side:'enemy'})));
-  const nameById = {};
-  allEntities.forEach(e=>{ nameById[e.id] = e.name; });
-  return allEntities.slice().sort(compareByInitiative).map(e=>{
+  const byId = {};
+  allEntities.forEach(e=>{ byId[e.id] = e; });
+
+  const consumed = new Set();
+  const items = [];
+  allEntities.forEach(e=>{
+    if(consumed.has(e.id)) return;
     const a = e.action;
-    const key = a.type==='distdisc' ? `distdisc_${a.distdiscMode}` : a.type;
-    const icon = ICONS[key] || '❔';
-    const num = INITIATIVE_NUMBERS[a.type] || '?';
-    const targetName = a.target && nameById[a.target] ? nameById[a.target] : null;
-    const resolved = e.played ? ' resolved' : '';
-    return `<div class="ribbon-card${resolved}" onclick="togglePlayed('${e.side}','${e.id}')">
-      <span class="r-num">${num}</span>
-      <span class="r-name">${esc(e.name)} ${icon}</span>
-      ${targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(targetName)}</span>` : ''}
-    </div>`;
-  }).join('');
+    const num = INITIATIVE_NUMBERS[a.type] || 99;
+    const target = a.target ? byId[a.target] : null;
+    const mutual = target && target.id !== e.id && target.action && target.action.target === e.id
+      && (INITIATIVE_NUMBERS[target.action.type]||99) === num;
+    if(mutual){
+      consumed.add(e.id); consumed.add(target.id);
+      const resolved = e.played ? ' resolved' : '';
+      items.push({num, html:`<div class="ribbon-card${resolved}" onclick="toggleActionPair('${e.side}','${e.id}','${target.side}','${target.id}')">
+        <span class="r-num">${num}</span>
+        <span class="r-name">${esc(e.name)} ${iconFor(e)}</span>
+        <span class="r-arrow">↔</span>
+        <span class="r-name">${iconFor(target)} ${esc(target.name)}</span>
+      </div>`});
+    } else {
+      consumed.add(e.id);
+      const targetName = target ? target.name : null;
+      const resolved = e.played ? ' resolved' : '';
+      items.push({num, html:`<div class="ribbon-card${resolved}" onclick="togglePlayed('${e.side}','${e.id}')">
+        <span class="r-num">${num}</span>
+        <span class="r-name">${esc(e.name)} ${iconFor(e)}</span>
+        ${targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(targetName)}</span>` : ''}
+      </div>`});
+    }
+  });
+  items.sort((a,b)=>a.num-b.num);
+  return items.map(i=>i.html).join('');
 }
 
 function centerSlotHTML(side){
