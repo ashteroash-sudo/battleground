@@ -280,6 +280,38 @@
   .corner-bl{bottom:16px; left:16px; border-bottom:2px solid var(--border); border-left:2px solid var(--border); border-bottom-left-radius:6px;}
   .corner-br{bottom:16px; right:16px; border-bottom:2px solid var(--border); border-right:2px solid var(--border); border-bottom-right-radius:6px;}
 
+  .played-toggle{
+    position:absolute;
+    top:6px;
+    right:6px;
+    z-index:6;
+    padding:6px 12px;
+    border-radius:999px;
+    border:2px solid var(--border);
+    background:rgba(10,6,7,.75);
+    color:var(--text-dim);
+    font-family:var(--font-display);
+    font-size:0.85rem;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .played-toggle:hover{border-color:var(--gold);}
+  .played-toggle.is-played{
+    border-color:var(--gold);
+    background:var(--gold);
+    color:#1c1215;
+    font-weight:700;
+  }
+
+  #turnCounter{
+    text-align:center;
+    margin-top:14px;
+    font-family:var(--font-display);
+    font-size:1.1rem;
+    color:var(--gold);
+    letter-spacing:0.04em;
+  }
+
   .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:12px; height:134px; justify-content:center; box-sizing:border-box; overflow:hidden; }
   body[data-mode="display"] .duel-info-plate{
     background:transparent;
@@ -292,7 +324,7 @@
   }
   .duel-slot{
     flex:1; display:flex; flex-direction:column; align-items:stretch; gap:14px;
-    justify-content:center; max-width:620px;
+    justify-content:center; max-width:620px; position:relative;
   }
   .duel-slot .avatar{ align-self:center; }
   .duel-slot.empty{
@@ -410,6 +442,7 @@
   <div class="header-controls edit-only">
     <button class="btn ghost" onclick="resetEncounter()">Réinitialiser la rencontre</button>
     <button class="btn" id="lockBtn" onclick="toggleLock()"></button>
+    <button class="btn ghost" onclick="nextTurn()">⏭️ Tour suivant</button>
     <span id="musicPanel" class="music-panel">
       <button class="btn ghost" id="musicPickBtn" onclick="document.getElementById('musicFileInput').click()">🎵 Choisir une musique</button>
       <span id="musicControls" style="display:none; align-items:center; gap:8px;">
@@ -441,6 +474,7 @@
       <div class="vs">VS</div>
       <div id="centerEnemy" class="duel-slot"></div>
     </div>
+    <div id="turnCounter"></div>
   </section>
 
   <section>
@@ -559,7 +593,8 @@ function ensureHealth(entity){
 function loadState(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem('vtm_battle_state')); }catch(e){}
-  state = saved || {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}};
+  state = saved || {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1};
+  if(state.turn === undefined) state.turn = 1;
   // synchronise toujours le portrait des joueurs avec les valeurs par défaut (pas d'édition de portrait joueur en jeu, donc pas de risque d'écraser une modification faite ici)
   state.players.forEach(p=>{
     const def = DEFAULT_PLAYERS.find(d=>d.id===p.id);
@@ -598,11 +633,27 @@ function savePortraitPools(){ localStorage.setItem('vtm_portrait_pools', JSON.st
 
 function resetEncounter(){
   if(!confirm('Réinitialiser PV, soif, actions des joueurs et vider les ennemis ?')) return;
-  state = {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}};
+  state = {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1};
   saveState(); render();
 }
 
 function toggleLock(){ state.locked = !state.locked; saveState(); render(); }
+
+function togglePlayed(side, id){
+  const arr = side === 'enemy' ? state.enemies : state.players;
+  const e = arr.find(x=>x.id===id);
+  if(!e) return;
+  e.played = !e.played;
+  saveState(); render();
+}
+
+function nextTurn(){
+  state.center = {player:null, enemy:null};
+  state.turn = (state.turn||1) + 1;
+  state.players.forEach(p=>{ p.played = false; });
+  state.enemies.forEach(e=>{ e.played = false; });
+  saveState(); render();
+}
 
 function toggleHealthBox(type, id, idx){
   const arr = type==='player' ? state.players : state.enemies;
@@ -1135,7 +1186,8 @@ function centerSlotHTML(side){
   if(!entity){
     return `<div class="duel-slot empty">Clique un portrait ${side==='player'?'joueur':'ennemi'} (en mode verrouillé) pour l'amener ici</div>`;
   }
-  return `${avatarHTML(entity,'large')}
+  const playedBtn = `<button class="played-toggle${entity.played?' is-played':''}" onclick="togglePlayed('${side}','${entity.id}')">${entity.played?'✓ A joué':'A joué ?'}</button>`;
+  return `${playedBtn}${avatarHTML(entity,'large')}
     <div class="duel-info-plate">
       <div class="name">${esc(entity.name)}</div>
       ${healthTrackHTML(entity, side==='player'?'player':'enemy', false)}
@@ -1241,6 +1293,7 @@ function render(){
 
   document.getElementById('centerPlayer').innerHTML = centerSlotHTML('player');
   document.getElementById('centerEnemy').innerHTML = centerSlotHTML('enemy');
+  document.getElementById('turnCounter').textContent = `Tour ${state.turn||1}`;
 
   document.getElementById('poolSelect').innerHTML = ENEMY_POOL.map((t,i)=>`<option value="${i}">${esc(t.label)} (${t.hpMin}-${t.hpMax} PV)</option>`).join('');
 
