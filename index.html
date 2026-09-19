@@ -113,21 +113,28 @@
     margin-bottom:16px;
     position:relative;
   }
-  .player-card{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start;}
-  .enemy-card{display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start;}
+  .player-card{display:flex; gap:16px; align-items:flex-start;}
+  .enemy-card{display:flex; gap:16px; align-items:flex-start;}
 
   .initiative-badge{
-    flex-basis:100%;
-    text-align:center;
-    margin-top:10px;
-    padding-top:8px;
-    border-top:1px solid var(--border);
-    font-family:var(--font-display);
-    font-size:0.85rem;
+    position:absolute;
+    right:-14px;
+    bottom:-14px;
+    width:46px;
+    height:46px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:radial-gradient(circle at 32% 28%, var(--panel-alt), var(--panel) 75%);
+    border:2px solid var(--gold);
     color:var(--gold);
-    letter-spacing:0.03em;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:1.35rem;
+    box-shadow:0 3px 10px rgba(0,0,0,.55);
+    z-index:5;
   }
-  .initiative-badge b{font-size:1.1rem;}
 
   .portrait-block{
     display:flex;
@@ -1015,7 +1022,7 @@ function initiativeBadgeHTML(entity){
   if(!state.locked) return '';
   const num = INITIATIVE_NUMBERS[entity.action.type];
   if(!num) return '';
-  return `<div class="initiative-badge">Initiative <b>${num}</b></div>`;
+  return `<div class="initiative-badge">${num}</div>`;
 }
 
 function actionPanelHTML(entity, kind){
