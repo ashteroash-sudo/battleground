@@ -98,14 +98,29 @@
 
   .initiative-ribbon{
     display:flex;
-    align-items:stretch;
-    gap:10px;
+    flex-direction:column;
+    gap:8px;
     overflow-x:auto;
     padding:14px 36px;
     background:var(--panel-alt);
     border-bottom:1px solid var(--border);
   }
   .initiative-ribbon:empty{ display:none; }
+  .ribbon-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .ribbon-row-label{
+    flex:none;
+    font-family:var(--font-display);
+    font-size:0.8rem;
+    color:var(--text-dim);
+    min-width:52px;
+  }
+  .ribbon-row-prev{ opacity:0.42; }
+  .ribbon-row-prev .ribbon-card{ cursor:default; }
+  .ribbon-row-prev .ribbon-card:hover{ border-color:var(--border); }
   .ribbon-card{
     flex:none;
     display:flex;
@@ -619,8 +634,9 @@ function ensureHealth(entity){
 function loadState(){
   let saved = null;
   try{ saved = JSON.parse(localStorage.getItem('vtm_battle_state')); }catch(e){}
-  state = saved || {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1};
+  state = saved || {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1, previousTurnRibbon:null};
   if(state.turn === undefined) state.turn = 1;
+  if(state.previousTurnRibbon === undefined) state.previousTurnRibbon = null;
   // synchronise toujours le portrait des joueurs avec les valeurs par défaut (pas d'édition de portrait joueur en jeu, donc pas de risque d'écraser une modification faite ici)
   state.players.forEach(p=>{
     const def = DEFAULT_PLAYERS.find(d=>d.id===p.id);
@@ -659,7 +675,7 @@ function savePortraitPools(){ localStorage.setItem('vtm_portrait_pools', JSON.st
 
 function resetEncounter(){
   if(!confirm('Réinitialiser PV, soif, actions des joueurs et vider les ennemis ?')) return;
-  state = {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1};
+  state = {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1, previousTurnRibbon:null};
   saveState(); render();
 }
 
@@ -686,6 +702,7 @@ function toggleActionPair(side1, id1, side2, id2){
 }
 
 function nextTurn(){
+  state.previousTurnRibbon = computeRibbonEntries();
   state.center = {player:null, enemy:null};
   state.turn = (state.turn||1) + 1;
   state.players.forEach(p=>{ p.played = false; });
@@ -1217,8 +1234,7 @@ function enemyCardHTML(e){
   </div>`;
 }
 
-function actionRibbonHTML(){
-  if(!state.locked) return '';
+function computeRibbonEntries(){
   const ICONS = {surprise:'💥', melee:'⚔️', distdisc_distance:'🔫', distdisc_discipline:'✨', nouvelle:'🏃', autre:'📜'};
   const iconFor = (e)=>{ const a=e.action; const key = a.type==='distdisc' ? `distdisc_${a.distdiscMode}` : a.type; return ICONS[key] || '❔'; };
   const allEntities = state.players.map(p=>Object.assign({}, p, {side:'player'}))
@@ -1237,41 +1253,65 @@ function actionRibbonHTML(){
       && (INITIATIVE_NUMBERS[target.action.type]||99) === num;
     if(mutual){
       consumed.add(e.id); consumed.add(target.id);
-      raw.push({num, type:'pair', e, target});
+      raw.push({num, kind:'pair', eSide:e.side, eId:e.id, eName:e.name, eIcon:iconFor(e), ePlayed:!!e.played,
+        targetSide:target.side, targetId:target.id, targetName:target.name, targetIcon:iconFor(target)});
     } else {
       consumed.add(e.id);
-      raw.push({num, type:'solo', e, target});
+      raw.push({num, kind:'solo', eSide:e.side, eId:e.id, eName:e.name, eIcon:iconFor(e), ePlayed:!!e.played,
+        targetSide: target?target.side:null, targetId: target?target.id:null, targetName: target?target.name:null});
     }
   });
   raw.sort((a,b)=>a.num-b.num);
 
   const hitCount = {};
-  const malusFor = (id)=>{ const n = hitCount[id]||0; hitCount[id] = n+1; return n; };
-  const malusTag = (m)=> m>0 ? `<span class="r-malus">−${m} dé${m>1?'s':''}</span>` : '';
-
-  return raw.map(item=>{
-    const {num, e, target} = item;
-    if(item.type==='pair'){
-      const malusOnTarget = malusFor(target.id);
-      const malusOnE = malusFor(e.id);
-      const resolved = e.played ? ' resolved' : '';
-      return `<div class="ribbon-card${resolved}" onclick="toggleActionPair('${e.side}','${e.id}','${target.side}','${target.id}')">
-        <span class="r-num">${num}</span>
-        <span class="r-name">${esc(e.name)} ${iconFor(e)}${malusTag(malusOnE)}</span>
-        <span class="r-arrow">↔</span>
-        <span class="r-name">${iconFor(target)} ${esc(target.name)}${malusTag(malusOnTarget)}</span>
-      </div>`;
+  const malusFor = (id)=>{ if(!id) return 0; const n = hitCount[id]||0; hitCount[id]=n+1; return n; };
+  raw.forEach(item=>{
+    if(item.kind==='pair'){
+      item.malusOnTarget = malusFor(item.targetId);
+      item.malusOnE = malusFor(item.eId);
     } else {
-      const m = target ? malusFor(target.id) : 0;
-      const targetName = target ? target.name : null;
-      const resolved = e.played ? ' resolved' : '';
-      return `<div class="ribbon-card${resolved}" onclick="togglePlayed('${e.side}','${e.id}')">
-        <span class="r-num">${num}</span>
-        <span class="r-name">${esc(e.name)} ${iconFor(e)}</span>
-        ${targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(targetName)}${malusTag(m)}</span>` : ''}
-      </div>`;
+      item.malus = item.targetId ? malusFor(item.targetId) : 0;
     }
-  }).join('');
+  });
+  return raw;
+}
+
+function ribbonEntryHTML(item, interactive){
+  const malusTag = (m)=> m>0 ? `<span class="r-malus">−${m} dé${m>1?'s':''}</span>` : '';
+  const resolvedClass = item.ePlayed ? ' resolved' : '';
+  if(item.kind==='pair'){
+    const click = interactive ? `onclick="toggleActionPair('${item.eSide}','${item.eId}','${item.targetSide}','${item.targetId}')"` : '';
+    return `<div class="ribbon-card${resolvedClass}" ${click}>
+      <span class="r-num">${item.num}</span>
+      <span class="r-name">${esc(item.eName)} ${item.eIcon}${malusTag(item.malusOnE)}</span>
+      <span class="r-arrow">↔</span>
+      <span class="r-name">${item.targetIcon} ${esc(item.targetName)}${malusTag(item.malusOnTarget)}</span>
+    </div>`;
+  }
+  const click = interactive ? `onclick="togglePlayed('${item.eSide}','${item.eId}')"` : '';
+  return `<div class="ribbon-card${resolvedClass}" ${click}>
+    <span class="r-num">${item.num}</span>
+    <span class="r-name">${esc(item.eName)} ${item.eIcon}</span>
+    ${item.targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(item.targetName)}${malusTag(item.malus)}</span>` : ''}
+  </div>`;
+}
+
+function actionRibbonHTML(){
+  if(!state.locked) return '';
+  const currentHtml = computeRibbonEntries().map(i=>ribbonEntryHTML(i,true)).join('');
+  let prevHtml = '';
+  if(state.previousTurnRibbon && state.previousTurnRibbon.length){
+    const prevCards = state.previousTurnRibbon.map(i=>ribbonEntryHTML(i,false)).join('');
+    prevHtml = `<div class="ribbon-row ribbon-row-prev">
+      <span class="ribbon-row-label">Tour ${(state.turn||1)-1}</span>
+      ${prevCards}
+    </div>`;
+  }
+  const currentRow = `<div class="ribbon-row ribbon-row-current">
+    <span class="ribbon-row-label">Tour ${state.turn||1}</span>
+    ${currentHtml}
+  </div>`;
+  return prevHtml + currentRow;
 }
 
 function centerSlotHTML(side){
