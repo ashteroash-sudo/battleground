@@ -1297,7 +1297,6 @@ function ribbonEntryHTML(item, interactive){
 }
 
 function actionRibbonHTML(){
-  if(!state.locked) return '';
   const currentHtml = computeRibbonEntries().map(i=>ribbonEntryHTML(i,true)).join('');
   let prevHtml = '';
   if(state.previousTurnRibbon && state.previousTurnRibbon.length){
