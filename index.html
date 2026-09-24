@@ -184,23 +184,39 @@
 
   .initiative-badge{
     position:absolute;
-    right:-14px;
-    bottom:-14px;
-    width:46px;
-    height:46px;
+    right:-18px;
+    bottom:-18px;
+    width:68px;
+    height:68px;
     border-radius:50%;
     display:flex;
     align-items:center;
     justify-content:center;
-    background:radial-gradient(circle at 32% 28%, var(--panel-alt), var(--panel) 75%);
-    border:2px solid var(--gold);
-    color:var(--gold);
+    background:var(--gold);
+    border:3px solid #14100c;
+    color:#14100c;
     font-family:var(--font-display);
-    font-weight:700;
-    font-size:1.35rem;
-    box-shadow:0 3px 10px rgba(0,0,0,.55);
+    font-weight:800;
+    font-size:2rem;
+    line-height:1;
+    box-shadow:0 3px 14px rgba(0,0,0,.6), 0 0 0 2px rgba(0,0,0,.3);
     z-index:5;
   }
+  .initiative-badge.large{
+    width:88px;
+    height:88px;
+    right:-22px;
+    bottom:-22px;
+    font-size:2.6rem;
+    border-width:4px;
+  }
+  .action-label{
+    font-size:1rem;
+    color:var(--text-dim);
+    letter-spacing:.02em;
+    text-align:center;
+  }
+  body[data-mode="display"] .action-label{ color:#a9c7cf; }
 
   .portrait-block{
     display:flex;
@@ -351,7 +367,7 @@
     letter-spacing:0.04em;
   }
 
-  .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:12px; height:134px; justify-content:center; box-sizing:border-box; overflow:hidden; }
+  .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:10px; height:168px; justify-content:center; box-sizing:border-box; overflow:hidden; }
   body[data-mode="display"] .duel-info-plate{
     background:transparent;
     border-top:1px solid var(--border);
@@ -1129,11 +1145,31 @@ function modSelect(id, field, val, disabled, updateFn){
 
 const INITIATIVE_NUMBERS = { surprise:1, melee:2, distdisc:3, nouvelle:4, autre:5 };
 
-function initiativeBadgeHTML(entity){
+function initiativeBadgeHTML(entity, size){
   if(!state.locked) return '';
   const num = INITIATIVE_NUMBERS[entity.action.type];
   if(!num) return '';
-  return `<div class="initiative-badge">${num}</div>`;
+  const cls = size==='large' ? ' large' : '';
+  return `<div class="initiative-badge${cls}">${num}</div>`;
+}
+
+function actionLabelText(entity){
+  const a = entity.action;
+  if(a.type === 'surprise') return 'Surprise';
+  if(a.type === 'melee') return 'Mêlée engagée';
+  if(a.type === 'nouvelle') return 'Nouvelle mêlée';
+  if(a.type === 'autre') return 'Autre action';
+  if(a.type === 'distdisc'){
+    if(a.distdiscMode === 'discipline') return a.disciplineName ? `Discipline : ${a.disciplineName}` : 'Discipline';
+    return 'Distance';
+  }
+  return '';
+}
+
+function actionLabelHTML(entity){
+  const label = actionLabelText(entity);
+  if(!label) return '';
+  return `<div class="action-label">${esc(label)}</div>`;
 }
 
 function actionPanelHTML(entity, kind){
@@ -1323,6 +1359,7 @@ function centerSlotHTML(side){
   return `${avatarHTML(entity,'large')}
     <div class="duel-info-plate">
       <div class="name">${esc(entity.name)}</div>
+      ${actionLabelHTML(entity)}
       ${healthTrackHTML(entity, side==='player'?'player':'enemy', false)}
       ${side==='player' ? soifControl(entity) : ''}
     </div>`;
