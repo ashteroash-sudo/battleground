@@ -582,7 +582,7 @@ function disciplinesFor(entity){
 const ENEMY_POOL = [
   {label:'Thug', hpMin:3, hpMax:6, category:'thug', volMin:3, volMax:4, combatMin:5, combatMax:7, socialMin:5, socialMax:6, mentalMin:3, mentalMax:4},
   {label:'Vampire', hpMin:5, hpMax:8, category:'vampire', volMin:5, volMax:6, combatMin:6, combatMax:8, socialMin:5, socialMax:7, mentalMin:5, mentalMax:6},
-  {label:'Sabbat (shovelhead)', hpMin:3, hpMax:6, category:'sabbat', volMin:5, volMax:6, combatMin:6, combatMax:8, socialMin:5, socialMax:7, mentalMin:5, mentalMax:6},
+  {label:'Sabbat (shovelhead)', hpMin:3, hpMax:6, category:'sabbat', volMin:3, volMax:4, combatMin:3, combatMax:5, socialMin:3, socialMax:4, mentalMin:3, mentalMax:4},
   {label:'Ordre', hpMin:4, hpMax:6, category:'ordre', volMin:5, volMax:5, combatMin:6, combatMax:7, socialMin:5, socialMax:6, mentalMin:5, mentalMax:6},
   {label:'Civil', hpMin:3, hpMax:5, category:'civil', volMin:3, volMax:4, combatMin:3, combatMax:4, socialMin:3, socialMax:5, mentalMin:3, mentalMax:4}
 ];
@@ -675,6 +675,11 @@ function loadState(){
   let savedRoster = null;
   try{ savedRoster = JSON.parse(localStorage.getItem('vtm_roster')); }catch(e){}
   roster = savedRoster || [];
+  // migration : les anciennes fiches du répertoire n'avaient qu'un PV fixe (hp)
+  roster.forEach(r=>{
+    if(r.hpMin === undefined) r.hpMin = r.hp ?? 1;
+    if(r.hpMax === undefined) r.hpMax = r.hp ?? r.hpMin;
+  });
   let savedPools = null;
   try{ savedPools = JSON.parse(localStorage.getItem('vtm_portrait_pools')); }catch(e){}
   portraitPools = savedPools || {thug:[], vampire:[], ordre:[], civil:[], sabbat:[]};
@@ -941,7 +946,8 @@ function removePoolImage(category, idx){
 function addFromRoster(rid){
   const r = roster.find(x=>x.id===rid);
   if(!r) return;
-  state.enemies.push({id:uid(), baseName:r.name, hp:r.hp, maxHp:r.hp, health:new Array(r.hp).fill(0), color:'#5c1a22', arme:r.arme, disciplines:r.disciplines, clan:r.clan, image:r.image, action:defaultAction()});
+  const hp = rollRange(r.hpMin ?? r.hp ?? 1, r.hpMax ?? r.hp ?? r.hpMin ?? 1);
+  state.enemies.push({id:uid(), baseName:r.name, hp, maxHp:hp, health:new Array(hp).fill(0), color:'#5c1a22', arme:r.arme, disciplines:r.disciplines, clan:r.clan, image:r.image, action:defaultAction()});
   saveState(); render();
 }
 
@@ -996,7 +1002,9 @@ function clearRosterImage(){
 function commitRoster(){
   const name = val('rf-name');
   if(!name){ alert('Le nom est requis.'); return; }
-  const hp = parseInt(val('rf-hp')) || 1;
+  let hpMin = parseInt(val('rf-hp-min')) || 1;
+  let hpMax = parseInt(val('rf-hp-max')) || hpMin;
+  if(hpMax < hpMin){ const t = hpMin; hpMin = hpMax; hpMax = t; }
   const arme = val('rf-arme');
   const clan = val('rf-clan');
   const disciplines = [];
@@ -1009,9 +1017,10 @@ function commitRoster(){
     ? (editingEntry ? editingEntry.image : undefined)
     : (rosterDraftImage === null ? undefined : rosterDraftImage);
   if(editingEntry){
-    Object.assign(editingEntry, {name, hp, arme, clan, disciplines, image});
+    Object.assign(editingEntry, {name, hpMin, hpMax, arme, clan, disciplines, image});
+    delete editingEntry.hp;
   } else {
-    roster.push({id:uid(), name, hp, arme, clan, disciplines, image});
+    roster.push({id:uid(), name, hpMin, hpMax, arme, clan, disciplines, image});
   }
   saveRoster();
   rosterEditingId = undefined;
@@ -1052,11 +1061,14 @@ function handleImportRoster(input){
     if(!Array.isArray(imported)){ alert('Format de fichier inattendu.'); input.value=''; return; }
     if(!confirm(`Ajouter ${imported.length} ennemi(s) du fichier au répertoire actuel (répertoire actuel conservé) ?`)){ input.value=''; return; }
     imported.forEach(item=>{
+      const hpMin = item.hpMin ?? item.hp ?? 1;
+      const hpMax = item.hpMax ?? item.hp ?? hpMin;
       roster.push({
         id: uid(),
         name: item.name || 'Sans nom',
-        hp: item.hp || 1,
+        hpMin, hpMax,
         arme: item.arme || '',
+        clan: item.clan || '',
         disciplines: item.disciplines || [],
         image: item.image || undefined
       });
@@ -1376,7 +1388,7 @@ function rosterEntryHTML(r){
       ${thumb}
       <div style="display:flex; flex-direction:column;">
         <strong>${esc(r.name)}</strong>
-        <small>${r.hp} PV${r.clan? ' · '+esc(r.clan):''}${r.arme? ' · '+esc(r.arme):''}${discSummary? ' · '+esc(discSummary):''}</small>
+        <small>${r.hpMin===r.hpMax ? r.hpMax+' PV' : r.hpMin+'–'+r.hpMax+' PV'}${r.clan? ' · '+esc(r.clan):''}${r.arme? ' · '+esc(r.arme):''}${discSummary? ' · '+esc(discSummary):''}</small>
       </div>
     </div>
     <div class="re-actions">
@@ -1395,8 +1407,12 @@ function renderRosterForm(){
   wrap.innerHTML = `<div class="roster-form">
     <div class="roster-form-title">nom</div>
     <input id="rf-name" placeholder="ex: Grand Méchant" value="${editing?esc(editing.name):''}">
-    <div class="roster-form-title">hp</div>
-    <input id="rf-hp" type="number" min="1" value="${editing?editing.hp:7}">
+    <div class="roster-form-title">pv (min – max, tiré au hasard à l'ajout)</div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input id="rf-hp-min" type="number" min="1" style="flex:1;" value="${editing?(editing.hpMin ?? editing.hp ?? 5):5}">
+      <span style="color:var(--text-dim);">–</span>
+      <input id="rf-hp-max" type="number" min="1" style="flex:1;" value="${editing?(editing.hpMax ?? editing.hp ?? 7):7}">
+    </div>
     <div class="roster-form-title">arme</div>
     <input id="rf-arme" placeholder="ex: Griffes" value="${editing&&editing.arme?esc(editing.arme):''}">
     <div class="roster-form-title">clan (catalogue de disciplines automatique)</div>
