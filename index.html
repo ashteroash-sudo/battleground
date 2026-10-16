@@ -157,6 +157,19 @@
     font-weight:700;
     margin-left:4px;
   }
+  .ribbon-card{ flex-direction:column; align-items:flex-start; gap:4px; }
+  .ribbon-card.active{ border-color:var(--gold); box-shadow:0 0 0 2px var(--gold); }
+  .ribbon-card .r-main{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .ribbon-card .r-type{ color:var(--text-dim); font-style:italic; font-size:0.78rem; }
+  .ribbon-card .r-dice-row{ display:flex; gap:10px; flex-wrap:wrap; font-size:0.74rem; color:var(--text-dim); }
+  .ribbon-card .r-dice strong{ color:var(--text); }
+  .duel-col-title{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .duel-terminer-btn{ font-size:0.78rem; padding:6px 10px; }
+  .center-dice{
+    font-size:0.78rem; color:var(--text-dim);
+    background:var(--panel-alt); border:1px solid var(--border); border-radius:6px;
+    padding:3px 10px; text-align:center;
+  }
 
   .col-title{
     font-family:var(--font-display);
@@ -367,7 +380,7 @@
     letter-spacing:0.04em;
   }
 
-  .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:10px; height:168px; justify-content:center; box-sizing:border-box; overflow:hidden; }
+  .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:8px; height:196px; justify-content:center; box-sizing:border-box; overflow:hidden; }
   body[data-mode="display"] .duel-info-plate{
     background:transparent;
     border-top:1px solid var(--border);
@@ -521,7 +534,10 @@
   </section>
 
   <section class="duel-col">
-    <div class="col-title" style="align-self:stretch;">Duel en cours</div>
+    <div class="col-title duel-col-title" style="align-self:stretch;">
+      <span>Duel en cours</span>
+      <button class="btn ghost edit-only duel-terminer-btn" onclick="resolveCenterDuel()">✅ Duel terminé → suivant</button>
+    </div>
     <div class="duel-arena">
       <div class="corner corner-tl"></div>
       <div class="corner corner-tr"></div>
@@ -872,6 +888,78 @@ function selectCenter(side, id){
   if(!state.locked) return;
   state.center[side] = id;
   saveState(); render();
+}
+
+function focusRibbonEntry(eSide, eId, targetSide, targetId){
+  if(!state.locked) return;
+  state.center = {player:null, enemy:null};
+  state.center[eSide] = eId;
+  if(targetId){ state.center[targetSide] = targetId; }
+  saveState(); render();
+}
+
+function resolveCenterDuel(){
+  if(!state.locked) return;
+  const entries = computeRibbonEntries();
+  const touched = new Set();
+  ['player','enemy'].forEach(side=>{
+    const id = state.center[side];
+    if(!id) return;
+    const entry = entries.find(it => it.eId===id || it.targetId===id);
+    if(!entry) return;
+    if(entry.kind==='pair'){
+      touched.add(entry.eSide+'|'+entry.eId);
+      touched.add(entry.targetSide+'|'+entry.targetId);
+    } else if(entry.eId===id){
+      touched.add(entry.eSide+'|'+entry.eId);
+    }
+  });
+  touched.forEach(key=>{
+    const i = key.indexOf('|');
+    const s = key.slice(0,i), id = key.slice(i+1);
+    const arr = s==='enemy' ? state.enemies : state.players;
+    const ent = arr.find(x=>x.id===id);
+    if(ent) ent.played = true;
+  });
+  const next = computeRibbonEntries().find(it=>!it.ePlayed);
+  state.center = {player:null, enemy:null};
+  if(next){
+    state.center[next.eSide] = next.eId;
+    if(next.targetId) state.center[next.targetSide] = next.targetId;
+  }
+  saveState(); render();
+}
+
+function isRibbonItemActive(item){
+  return state.center.player===item.eId || state.center.enemy===item.eId ||
+    (!!item.targetId && (state.center.player===item.targetId || state.center.enemy===item.targetId));
+}
+
+function findRibbonEntity(side, id){
+  if(!id) return null;
+  const arr = side==='enemy' ? enemiesViewCache : state.players;
+  return arr.find(x=>x.id===id);
+}
+
+function diceInfoParts(entity){
+  if(!entity) return [];
+  const parts = [];
+  if(entity.statPool) parts.push(`Réserve ${entity.statPool.combat} dés`);
+  const roll = entity.action && entity.action.disciplineRoll;
+  if(roll) parts.push(`Jet : ${roll}`);
+  return parts;
+}
+
+function diceLineHTML(label, entity){
+  const parts = diceInfoParts(entity);
+  if(!parts.length) return '';
+  return `<span class="r-dice"><strong>${esc(label)}</strong> ${esc(parts.join(' · '))}</span>`;
+}
+
+function centerDiceHTML(entity){
+  const parts = diceInfoParts(entity);
+  if(!parts.length) return '';
+  return `<div class="center-dice edit-only">${esc(parts.join(' · '))}</div>`;
 }
 
 const GITHUB_OWNER = 'ashteroash-sudo';
@@ -1328,20 +1416,33 @@ function computeRibbonEntries(){
 function ribbonEntryHTML(item, interactive){
   const malusTag = (m)=> m>0 ? `<span class="r-malus">−${m} dé${m>1?'s':''}</span>` : '';
   const resolvedClass = item.ePlayed ? ' resolved' : '';
+  const activeClass = (interactive && isRibbonItemActive(item)) ? ' active' : '';
+  const actor = findRibbonEntity(item.eSide, item.eId);
+  const target = item.targetId ? findRibbonEntity(item.targetSide, item.targetId) : null;
+  const actorLabel = actor ? actionLabelText(actor) : '';
   if(item.kind==='pair'){
-    const click = interactive ? `onclick="toggleActionPair('${item.eSide}','${item.eId}','${item.targetSide}','${item.targetId}')"` : '';
-    return `<div class="ribbon-card${resolvedClass}" ${click}>
-      <span class="r-num">${item.num}</span>
-      <span class="r-name">${esc(item.eName)} ${item.eIcon}${malusTag(item.malusOnE)}</span>
-      <span class="r-arrow">↔</span>
-      <span class="r-name">${item.targetIcon} ${esc(item.targetName)}${malusTag(item.malusOnTarget)}</span>
+    const targetLabel = target ? actionLabelText(target) : '';
+    const click = interactive ? `onclick="focusRibbonEntry('${item.eSide}','${item.eId}','${item.targetSide}','${item.targetId}')"` : '';
+    const diceRow = [diceLineHTML(item.eName, actor), diceLineHTML(item.targetName, target)].filter(Boolean).join('');
+    return `<div class="ribbon-card${resolvedClass}${activeClass}" ${click}>
+      <div class="r-main">
+        <span class="r-num">${item.num}</span>
+        <span class="r-name">${esc(item.eName)}</span><span class="r-type">${esc(actorLabel)}</span>${malusTag(item.malusOnE)}
+        <span class="r-arrow">⟷</span>
+        <span class="r-type">${esc(targetLabel)}</span><span class="r-name">${esc(item.targetName)}</span>${malusTag(item.malusOnTarget)}
+      </div>
+      ${diceRow ? `<div class="r-dice-row edit-only">${diceRow}</div>` : ''}
     </div>`;
   }
-  const click = interactive ? `onclick="togglePlayed('${item.eSide}','${item.eId}')"` : '';
-  return `<div class="ribbon-card${resolvedClass}" ${click}>
-    <span class="r-num">${item.num}</span>
-    <span class="r-name">${esc(item.eName)} ${item.eIcon}</span>
-    ${item.targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(item.targetName)}${malusTag(item.malus)}</span>` : ''}
+  const click = interactive ? `onclick="focusRibbonEntry('${item.eSide}','${item.eId}','${item.targetSide||''}','${item.targetId||''}')"` : '';
+  const diceRow = [diceLineHTML(item.eName, actor), target ? diceLineHTML(item.targetName, target) : ''].filter(Boolean).join('');
+  return `<div class="ribbon-card${resolvedClass}${activeClass}" ${click}>
+    <div class="r-main">
+      <span class="r-num">${item.num}</span>
+      <span class="r-name">${esc(item.eName)}</span><span class="r-type">${esc(actorLabel)}</span>
+      ${item.targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(item.targetName)}${malusTag(item.malus)}</span>` : ''}
+    </div>
+    ${diceRow ? `<div class="r-dice-row edit-only">${diceRow}</div>` : ''}
   </div>`;
 }
 
@@ -1373,6 +1474,7 @@ function centerSlotHTML(side){
     <div class="duel-info-plate">
       <div class="name">${esc(entity.name)}</div>
       ${actionLabelHTML(entity)}
+      ${centerDiceHTML(entity)}
       ${healthTrackHTML(entity, side==='player'?'player':'enemy', false)}
       ${side==='player' ? soifControl(entity) : ''}
     </div>`;
