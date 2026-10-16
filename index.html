@@ -170,6 +170,10 @@
     background:var(--panel-alt); border:1px solid var(--border); border-radius:6px;
     padding:3px 10px; text-align:center;
   }
+  .center-dice.center-malus{
+    color:var(--blood-bright, #e05a5a); font-weight:700;
+    border-color:var(--blood-bright, #e05a5a);
+  }
 
   .col-title{
     font-family:var(--font-display);
@@ -380,7 +384,7 @@
     letter-spacing:0.04em;
   }
 
-  .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:8px; height:196px; justify-content:center; box-sizing:border-box; overflow:hidden; }
+  .duel-info-plate{ display:flex; flex-direction:column; align-items:center; gap:6px; height:216px; justify-content:center; box-sizing:border-box; overflow:hidden; }
   body[data-mode="display"] .duel-info-plate{
     background:transparent;
     border-top:1px solid var(--border);
@@ -949,12 +953,14 @@ function resolveCenterDuel(){
 }
 
 function isRibbonItemActive(item){
-  // Actif seulement si l'entité est bien ACTRICE de ce duel côté centre (son propre slot),
-  // ou si c'est la moitié "cible" d'une paire mutuelle (qui représente aussi son propre tour).
-  // Ne doit PAS s'allumer juste parce qu'une entrée solo cible quelqu'un déjà au centre.
-  if(state.center[item.eSide] === item.eId) return true;
-  if(item.kind==='pair' && state.center[item.targetSide] === item.targetId) return true;
-  return false;
+  // Actif seulement si CETTE entrée précise correspond exactement au duel centré :
+  // son acteur ET sa cible (s'il y en a une) doivent tous les deux matcher le centre.
+  // Sans ce double contrôle, un personnage présent dans 2 entrées différentes (une fois
+  // comme cible, une fois comme acteur de son propre duel ailleurs) faisait s'allumer
+  // les deux cartes en même temps dès qu'il apparaissait au centre — confus.
+  if(state.center[item.eSide] !== item.eId) return false;
+  if(item.targetId && state.center[item.targetSide] !== item.targetId) return false;
+  return true;
 }
 
 function findRibbonEntity(side, id){
@@ -978,10 +984,36 @@ function diceLineHTML(label, entity){
   return `<span class="r-dice"><strong>${esc(label)}</strong> ${esc(parts.join(' · '))}</span>`;
 }
 
-function centerDiceHTML(entity){
+function centerMalusFor(side){
+  // Retrouve l'entrée du bandeau qui correspond exactement au duel actuellement centré
+  // (même logique que isRibbonItemActive) pour en extraire le malus de dés de CETTE
+  // entité, côté `side`, dans ce duel précis (une entité peut avoir un malus différent
+  // selon le duel où elle apparaît, puisqu'il dépend du nombre de fois où elle a déjà
+  // été ciblée plus tôt dans l'ordre d'initiative).
+  const id = state.center[side];
+  if(!id) return 0;
+  const entry = computeRibbonEntries().find(it=>{
+    if(state.center[it.eSide] !== it.eId) return false;
+    if(it.targetId && state.center[it.targetSide] !== it.targetId) return false;
+    return true;
+  });
+  if(!entry) return 0;
+  if(entry.kind==='pair'){
+    if(entry.eSide===side) return entry.malusOnE;
+    if(entry.targetSide===side) return entry.malusOnTarget;
+  } else if(entry.targetSide===side && entry.targetId===id){
+    return entry.malus;
+  }
+  return 0;
+}
+
+function centerDiceHTML(entity, side){
   const parts = diceInfoParts(entity);
-  if(!parts.length) return '';
-  return `<div class="center-dice edit-only">${esc(parts.join(' · '))}</div>`;
+  const mjPart = parts.length ? `<div class="center-dice edit-only">${esc(parts.join(' · '))}</div>` : '';
+  // Le malus (cible répétée) reste visible de tous, comme dans le bandeau d'initiative.
+  const m = side ? centerMalusFor(side) : 0;
+  const malusPart = m>0 ? `<div class="center-dice center-malus">−${m} dé${m>1?'s':''} (ciblé·e plusieurs fois)</div>` : '';
+  return mjPart + malusPart;
 }
 
 const GITHUB_OWNER = 'ashteroash-sudo';
@@ -1445,7 +1477,6 @@ function ribbonEntryHTML(item, interactive){
   if(item.kind==='pair'){
     const targetLabel = target ? actionLabelText(target) : '';
     const click = interactive ? `onclick="focusRibbonEntry('${item.eSide}','${item.eId}','${item.targetSide}','${item.targetId}')"` : '';
-    const diceRow = [diceLineHTML(item.eName, actor), diceLineHTML(item.targetName, target)].filter(Boolean).join('');
     return `<div class="ribbon-card${resolvedClass}${activeClass}" ${click}>
       <div class="r-main">
         <span class="r-num">${item.num}</span>
@@ -1453,18 +1484,15 @@ function ribbonEntryHTML(item, interactive){
         <span class="r-arrow">⟷</span>
         <span class="r-type">${esc(targetLabel)}</span><span class="r-name">${esc(item.targetName)}</span>${malusTag(item.malusOnTarget)}
       </div>
-      ${diceRow ? `<div class="r-dice-row edit-only">${diceRow}</div>` : ''}
     </div>`;
   }
   const click = interactive ? `onclick="focusRibbonEntry('${item.eSide}','${item.eId}','${item.targetSide||''}','${item.targetId||''}')"` : '';
-  const diceRow = [diceLineHTML(item.eName, actor), target ? diceLineHTML(item.targetName, target) : ''].filter(Boolean).join('');
   return `<div class="ribbon-card${resolvedClass}${activeClass}" ${click}>
     <div class="r-main">
       <span class="r-num">${item.num}</span>
       <span class="r-name">${esc(item.eName)}</span><span class="r-type">${esc(actorLabel)}</span>
       ${item.targetName ? `<span class="r-arrow">→</span><span class="r-target">${esc(item.targetName)}${malusTag(item.malus)}</span>` : ''}
     </div>
-    ${diceRow ? `<div class="r-dice-row edit-only">${diceRow}</div>` : ''}
   </div>`;
 }
 
@@ -1496,7 +1524,7 @@ function centerSlotHTML(side){
     <div class="duel-info-plate">
       <div class="name">${esc(entity.name)}</div>
       ${actionLabelHTML(entity)}
-      ${centerDiceHTML(entity)}
+      ${centerDiceHTML(entity, side)}
       ${healthTrackHTML(entity, side==='player'?'player':'enemy', false)}
       ${side==='player' ? soifControl(entity) : ''}
     </div>`;
