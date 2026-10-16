@@ -915,13 +915,18 @@ function resolveCenterDuel(){
   ['player','enemy'].forEach(side=>{
     const id = state.center[side];
     if(!id) return;
-    const entry = entries.find(it => it.eId===id || it.targetId===id);
+    // On cherche en priorité l'entrée où cette entité est l'ACTRICE (son propre tour).
+    // Une entrée où elle n'apparaît que comme cible (targetId) ne doit jamais être
+    // retenue ici : sinon, si une entité est attaquée tôt dans l'ordre d'initiative
+    // mais agit elle-même plus tard, find() verrouillait sur l'entrée "cible" et son
+    // propre tour n'était jamais marqué joué (le duel restait bloqué indéfiniment).
+    const entry = entries.find(it => it.eSide===side && it.eId===id) ||
+      entries.find(it => it.kind==='pair' && it.targetSide===side && it.targetId===id);
     if(!entry) return;
+    touched.add(side+'|'+id);
     if(entry.kind==='pair'){
       touched.add(entry.eSide+'|'+entry.eId);
       touched.add(entry.targetSide+'|'+entry.targetId);
-    } else if(entry.eId===id){
-      touched.add(entry.eSide+'|'+entry.eId);
     }
   });
   touched.forEach(key=>{
@@ -944,8 +949,12 @@ function resolveCenterDuel(){
 }
 
 function isRibbonItemActive(item){
-  return state.center.player===item.eId || state.center.enemy===item.eId ||
-    (!!item.targetId && (state.center.player===item.targetId || state.center.enemy===item.targetId));
+  // Actif seulement si l'entité est bien ACTRICE de ce duel côté centre (son propre slot),
+  // ou si c'est la moitié "cible" d'une paire mutuelle (qui représente aussi son propre tour).
+  // Ne doit PAS s'allumer juste parce qu'une entrée solo cible quelqu'un déjà au centre.
+  if(state.center[item.eSide] === item.eId) return true;
+  if(item.kind==='pair' && state.center[item.targetSide] === item.targetId) return true;
+  return false;
 }
 
 function findRibbonEntity(side, id){
