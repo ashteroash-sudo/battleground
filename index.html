@@ -916,22 +916,53 @@ function resolveCenterDuel(){
   if(!state.locked) return;
   const entries = computeRibbonEntries();
   const touched = new Set();
+
+  // 1) On cherche l'entrée qui correspond EXACTEMENT au duel affiché au centre (même
+  // logique que isRibbonItemActive) : son acteur ET sa cible (s'il y en a une)
+  // matchent tous les deux le centre actuel. C'est la vraie action en cours.
+  const exact = entries.find(it=>{
+    if(state.center[it.eSide] !== it.eId) return false;
+    if(it.targetId && state.center[it.targetSide] !== it.targetId) return false;
+    return true;
+  });
+  // Côtés du centre déjà "expliqués" par cette entrée exacte — on ne doit pas leur
+  // appliquer la résolution générique ci-dessous, même s'ils ne sont pas joués.
+  const explainedSides = new Set();
+  if(exact){
+    touched.add(exact.eSide+'|'+exact.eId);
+    explainedSides.add(exact.eSide);
+    if(exact.kind==='pair'){
+      // Paire mutuelle : les deux moitiés agissent l'une sur l'autre, donc les deux
+      // sont bien résolues ensemble.
+      touched.add(exact.targetSide+'|'+exact.targetId);
+      explainedSides.add(exact.targetSide);
+    } else if(exact.targetId){
+      // Entrée solo avec cible : par défaut la cible est juste affichée pour le
+      // contexte, elle n'a pas forcément agi elle-même. MAIS si cette cible a sa
+      // propre entrée (à un autre numéro d'initiative) qui vise EN RETOUR l'acteur
+      // actuellement centré (ex: Thug2 attaque Pavel au num3, Pavel attaque Thug2 au
+      // num4 — un échange croisé que le tri par numéro ne regroupe pas en paire), ce
+      // duel croisé est bien celui affiché : on la résout aussi. Sinon (sa propre
+      // entrée vise quelqu'un d'autre, comme Thug4 qui attaque Vito pendant que
+      // Cassandre l'attaque, lui), on ne la touche pas — c'était le bug où son vrai
+      // tour, sans rapport, se retrouvait sauté silencieusement.
+      explainedSides.add(exact.targetSide);
+      const crossEntry = entries.find(it => it.eSide===exact.targetSide && it.eId===exact.targetId);
+      if(crossEntry && crossEntry.targetId === exact.eId){
+        touched.add(crossEntry.eSide+'|'+crossEntry.eId);
+      }
+    }
+  }
+
+  // 2) Centrage manuel indépendant (portrait cliqué sans lien avec une entrée de
+  // duel réciproque) : on résout le tour propre de chaque occupant restant.
   ['player','enemy'].forEach(side=>{
+    if(explainedSides.has(side)) return;
     const id = state.center[side];
     if(!id) return;
-    // On cherche en priorité l'entrée où cette entité est l'ACTRICE (son propre tour).
-    // Une entrée où elle n'apparaît que comme cible (targetId) ne doit jamais être
-    // retenue ici : sinon, si une entité est attaquée tôt dans l'ordre d'initiative
-    // mais agit elle-même plus tard, find() verrouillait sur l'entrée "cible" et son
-    // propre tour n'était jamais marqué joué (le duel restait bloqué indéfiniment).
-    const entry = entries.find(it => it.eSide===side && it.eId===id) ||
-      entries.find(it => it.kind==='pair' && it.targetSide===side && it.targetId===id);
+    const entry = entries.find(it => it.eSide===side && it.eId===id);
     if(!entry) return;
     touched.add(side+'|'+id);
-    if(entry.kind==='pair'){
-      touched.add(entry.eSide+'|'+entry.eId);
-      touched.add(entry.targetSide+'|'+entry.targetId);
-    }
   });
   touched.forEach(key=>{
     const i = key.indexOf('|');
