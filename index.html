@@ -736,8 +736,19 @@ function savePortraitPools(){ localStorage.setItem('vtm_portrait_pools', JSON.st
 
 
 function resetEncounter(){
-  if(!confirm('Réinitialiser PV, soif, actions des joueurs et vider les ennemis ?')) return;
-  state = {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1, previousTurnRibbon:null};
+  if(!confirm('Vider les ennemis et réinitialiser les actions pour une nouvelle rencontre ? (PV et Soif des joueurs sont conservés)')) return;
+  // On ne reconstruit plus les joueurs depuis DEFAULT_PLAYERS : les PV/Soif d'un vampire
+  // ne se régénèrent pas tout seuls entre deux rencontres d'une même session, donc on les
+  // garde tels quels. Seules les actions (choix de tour) et les ennemis sont remis à zéro.
+  state.players.forEach(p=>{
+    p.action = defaultAction();
+    p.played = false;
+  });
+  state.enemies = [];
+  state.center = {player:null, enemy:null};
+  state.turn = 1;
+  state.previousTurnRibbon = null;
+  state.locked = false;
   saveState(); render();
 }
 
