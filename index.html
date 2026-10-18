@@ -684,6 +684,15 @@ function loadState(){
   state = saved || {locked:false, players:JSON.parse(JSON.stringify(DEFAULT_PLAYERS)), enemies:[], center:{player:null, enemy:null}, turn:1, previousTurnRibbon:null};
   if(state.turn === undefined) state.turn = 1;
   if(state.previousTurnRibbon === undefined) state.previousTurnRibbon = null;
+  // Si un·e nouveau·elle joueur·se a été ajouté·e à DEFAULT_PLAYERS depuis la dernière
+  // sauvegarde (la table garde son état en localStorage), on l'insère dans la liste
+  // existante sans toucher aux PV/Soif/actions déjà en cours des autres joueurs — sinon
+  // elle n'apparaîtrait jamais tant que la sauvegarde n'est pas réinitialisée.
+  DEFAULT_PLAYERS.forEach(def=>{
+    if(!state.players.find(p=>p.id===def.id)){
+      state.players.push(JSON.parse(JSON.stringify(def)));
+    }
+  });
   // synchronise toujours le portrait des joueurs avec les valeurs par défaut (pas d'édition de portrait joueur en jeu, donc pas de risque d'écraser une modification faite ici)
   state.players.forEach(p=>{
     const def = DEFAULT_PLAYERS.find(d=>d.id===p.id);
@@ -695,6 +704,7 @@ function loadState(){
     if(!p.clan){
       if(def && def.clan) p.clan = def.clan;
     }
+    if(!p.action) p.action = defaultAction();
     ensureHealth(p);
   });
   // rétro-compatibilité : les ennemis créés avant l'ajout du cadre d'action n'en ont pas encore
