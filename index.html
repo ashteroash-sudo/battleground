@@ -534,7 +534,7 @@
       <audio id="combatAudio" loop></audio>
     </span>
   </div>
-  <button class="btn ghost" id="viewToggleBtn" onclick="toggleViewMode()"></button>
+  <button class="btn ghost" id="viewToggleBtn" onclick="openPlayerScreen()"></button>
 </header>
 
 <div id="actionRibbon" class="initiative-ribbon edit-only"></div>
@@ -672,24 +672,47 @@ if(LOCKED_PLAYER_SCREEN){
     const btn = document.getElementById('viewToggleBtn');
     if(btn) btn.style.display = 'none';
   });
-  // Un navigateur ne peut PAS passer lui-même en plein écran au chargement (restriction
-  // de sécurité : il faut un vrai geste de la personne). On déclenche donc le plein
-  // écran au tout premier clic n'importe où sur la page — en pratique, elle ouvre le
-  // lien sur l'écran du rétroprojecteur, clique une fois, et ça y reste plein écran
-  // pour le reste de la session (Échap pour en sortir si besoin, comme partout).
-  document.addEventListener('click', function goFullscreen(){
+  // Un navigateur peut passer en plein écran tout seul au chargement d'une fenêtre
+  // ouverte par window.open() depuis un clic (le geste de la personne "couvre" encore
+  // l'ouverture) — on tente donc l'auto plein écran dès le chargement. Si le navigateur
+  // refuse malgré tout, le tout premier clic sur la page le déclenche en filet de
+  // sécurité (Échap pour en sortir si besoin, comme partout).
+  const tryFullscreen = ()=>{
     if(!document.fullscreenElement && document.documentElement.requestFullscreen){
       document.documentElement.requestFullscreen().catch(()=>{});
     }
-  }, {once:true});
+  };
+  window.addEventListener('load', tryFullscreen);
+  document.addEventListener('click', tryFullscreen, {once:true});
+}
+
+// Bouton "Vue joueurs" côté MJ : on n'altère JAMAIS la fenêtre MJ elle-même (elle doit
+// rester en Vue édition en permanence) — on ouvre une fenêtre séparée, verrouillée via
+// ?vue=joueurs, positionnée sur l'écran étendu (le rétroprojecteur, en général à droite
+// de l'écran principal). Les deux fenêtres restent synchronisées en direct via le même
+// mécanisme localStorage que le reste de l'appli.
+function openPlayerScreen(){
+  const url = location.pathname + '?vue=joueurs';
+  const left = (window.screen.availLeft || 0) + window.screen.availWidth;
+  const features = [
+    'left=' + left,
+    'top=0',
+    'width=' + window.screen.availWidth,
+    'height=' + window.screen.availHeight,
+    'menubar=no', 'toolbar=no', 'location=no', 'status=no'
+  ].join(',');
+  const win = window.open(url, 'vtm_player_screen', features);
+  if(win){
+    win.focus();
+  } else {
+    alert("Le navigateur a bloqué l'ouverture de la fenêtre joueurs (pop-up). Autorise les pop-ups pour ce site, puis réessaie.");
+  }
 }
 
 function toggleViewMode(){
-  if(LOCKED_PLAYER_SCREEN) return; // l'écran joueurs dédié reste verrouillé en Vue joueurs
-  DISPLAY_MODE = !DISPLAY_MODE;
-  sessionStorage.setItem('vtm_view_mode', DISPLAY_MODE ? 'display' : 'edit');
-  document.body.dataset.mode = DISPLAY_MODE ? 'display' : 'edit';
-  render();
+  // Conservé pour compatibilité ; la fenêtre MJ elle-même ne bascule plus jamais seule.
+  if(LOCKED_PLAYER_SCREEN) return;
+  openPlayerScreen();
 }
 
 window.addEventListener('storage', (e)=>{
@@ -1718,7 +1741,7 @@ function render(){
   document.body.dataset.locked = state.locked ? 'true' : 'false';
   document.getElementById('lockBtn').textContent = state.locked ? '🔒 Verrouillé (combat)' : '🔓 Déverrouillé (édition)';
   document.getElementById('lockBtn').className = 'btn' + (state.locked ? ' lock-on' : '');
-  document.getElementById('viewToggleBtn').textContent = DISPLAY_MODE ? '✏️ Vue édition' : '🎭 Vue joueurs';
+  document.getElementById('viewToggleBtn').textContent = '🎭 Vue joueurs';
 
   const byInitiative = (a,b) => (INITIATIVE_NUMBERS[a.action.type]||99) - (INITIATIVE_NUMBERS[b.action.type]||99);
   const playersToRender = state.locked ? state.players.slice().sort(byInitiative) : state.players;
