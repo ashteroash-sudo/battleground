@@ -654,10 +654,38 @@ let enemiesViewCache = [];
 let targetedIds = new Set();
 let portraitPools = {thug:[], vampire:[], ordre:[], civil:[], sabbat:[]};
 
-let DISPLAY_MODE = sessionStorage.getItem('vtm_view_mode') === 'display';
+// Lien dédié "écran joueurs" : ouvrir cette page avec ?vue=joueurs dans l'URL (à
+// mettre en favori sur le PC branché au rétroprojecteur) force systématiquement la
+// Vue joueurs au chargement, sans jamais repasser par sessionStorage — plus besoin de
+// dupliquer l'écran puis de cliquer sur "Vue joueurs" à chaque fois : on ouvre juste ce
+// lien-là sur le second écran et ça y reste, pendant que la fenêtre MJ (l'URL normale,
+// sans paramètre) continue d'afficher tout. Les deux se mettent à jour en direct via le
+// même mécanisme localStorage déjà utilisé entre onglets/fenêtres.
+const FORCED_VIEW = new URLSearchParams(location.search).get('vue');
+const LOCKED_PLAYER_SCREEN = FORCED_VIEW === 'joueurs';
+let DISPLAY_MODE = LOCKED_PLAYER_SCREEN ? true : (sessionStorage.getItem('vtm_view_mode') === 'display');
 document.body.dataset.mode = DISPLAY_MODE ? 'display' : 'edit';
+if(LOCKED_PLAYER_SCREEN){
+  // Écran dédié aux joueurs : on masque même le bouton de bascule pour qu'il n'y ait
+  // strictement aucun contrôle visible ni cliquable sur cet écran-là.
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const btn = document.getElementById('viewToggleBtn');
+    if(btn) btn.style.display = 'none';
+  });
+  // Un navigateur ne peut PAS passer lui-même en plein écran au chargement (restriction
+  // de sécurité : il faut un vrai geste de la personne). On déclenche donc le plein
+  // écran au tout premier clic n'importe où sur la page — en pratique, elle ouvre le
+  // lien sur l'écran du rétroprojecteur, clique une fois, et ça y reste plein écran
+  // pour le reste de la session (Échap pour en sortir si besoin, comme partout).
+  document.addEventListener('click', function goFullscreen(){
+    if(!document.fullscreenElement && document.documentElement.requestFullscreen){
+      document.documentElement.requestFullscreen().catch(()=>{});
+    }
+  }, {once:true});
+}
 
 function toggleViewMode(){
+  if(LOCKED_PLAYER_SCREEN) return; // l'écran joueurs dédié reste verrouillé en Vue joueurs
   DISPLAY_MODE = !DISPLAY_MODE;
   sessionStorage.setItem('vtm_view_mode', DISPLAY_MODE ? 'display' : 'edit');
   document.body.dataset.mode = DISPLAY_MODE ? 'display' : 'edit';
