@@ -1656,15 +1656,34 @@ function duelArrowHTML(){
   const p = state.center.player ? state.players.find(x=>x.id===state.center.player) : null;
   const e = state.center.enemy ? enemiesViewCache.find(x=>x.id===state.center.enemy) : null;
   if(!p || !e) return '';
-  const pTargetsE = p.action && p.action.target === e.id;
-  const eTargetsP = e.action && e.action.target === p.id;
   const pLabel = actionLabelText(p);
   const eLabel = actionLabelText(e);
+  // On retrouve l'entrée du bandeau qui correspond exactement au duel centré (même logique
+  // que isRibbonItemActive/centerMalusFor) pour savoir qui agit VRAIMENT maintenant et dans
+  // quel sens. Avant, on affichait ⟷ dès que les deux se visaient mutuellement — ce qui
+  // fusionnait à tort en "duel mutuel" deux actions qui se visent l'une l'autre mais à des
+  // numéros d'initiative différents (ex: mêlée au numéro 2 contre un tir au numéro 3) : le
+  // tir n'a pas encore eu lieu, ce n'est pas un échange simultané.
+  const entry = computeRibbonEntries().find(it=>{
+    if(state.center[it.eSide] !== it.eId) return false;
+    if(it.targetId && state.center[it.targetSide] !== it.targetId) return false;
+    return true;
+  });
   let arrow;
-  if(pTargetsE && eTargetsP) arrow = '⟷';
-  else if(pTargetsE) arrow = '→';
-  else if(eTargetsP) arrow = '←';
-  else return '';
+  if(entry && entry.kind === 'pair'){
+    arrow = '⟷'; // vraie paire : même numéro d'initiative, action simultanée
+  } else if(entry && entry.targetId){
+    arrow = entry.eSide === 'player' ? '→' : '←'; // solo : un seul agit maintenant, l'autre est juste affiché pour le contexte
+  } else {
+    // Centrage manuel sans entrée de bandeau correspondante (deux portraits amenés à la
+    // main) : on retombe sur le sens brut, mais jamais en mutuel puisqu'on ne sait pas
+    // lequel agit réellement "maintenant".
+    const pTargetsE = p.action && p.action.target === e.id;
+    const eTargetsP = e.action && e.action.target === p.id;
+    if(pTargetsE) arrow = '→';
+    else if(eTargetsP) arrow = '←';
+    else return '';
+  }
   return `${esc(pLabel)} <span class="daw-arrow">${arrow}</span> ${esc(eLabel)}`;
 }
 
